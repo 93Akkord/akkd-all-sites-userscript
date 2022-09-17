@@ -62,8 +62,6 @@
         "**/*.d.ts": true,
         "**/__to-be-deleted": true,
         "**/tempCodeRunnerFile.*": true,
-
-        "**/package.json": true,
         "**/package-lock.json": true,
         "**/@meta": true
     },

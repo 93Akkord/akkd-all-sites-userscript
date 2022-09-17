@@ -3,7 +3,7 @@
 // #region Info
 
 // @name        Akkd All Sites
-// @version     0.0.3
+// @version     0.0.4
 // @description Akkd All Sites
 // @copyright   2022+, Michael Barros (https://openuserjs.org/users/93Akkord)
 // @license     CC-BY-NC-SA-4.0; https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
@@ -77,134 +77,6 @@
 /// <reference path='./node_modules/@types/tampermonkey/index.d.ts' />
 /// <reference path='./node_modules/@types/jquery/index.d.ts' />
 /// <reference path='./node_modules/@types/arrive/index.d.ts' />
-
-MoveableElement = (() => {
-    class MoveableElement {
-        /**
-         * Creates an instance of MoveableElement.
-         * @param {HTMLElement} element
-         * @param {boolean} requireKeyDown
-         * @memberof MoveableElement
-         */
-        constructor(element, requireKeyDown) {
-            this.element = element;
-            this.requireKeyDown = requireKeyDown || false;
-            this.handleMouseDown = this.handleMouseDown.bind(this);
-            this.handleMouseUp = this.handleMouseUp.bind(this);
-            this.handleMouseMove = this.handleMouseMove.bind(this);
-
-            this.moving = false;
-            this.keyPressed = false;
-            this.originalCursor = getStyle(this.element, 'cursor');
-
-            this.setupEvents();
-        }
-
-        setupEvents() {
-            if (!document.body) {
-                setTimeout(() => {
-                    this.setupEvents();
-                }, 250);
-            } else {
-                document.body.addEventListener('keydown', (ev) => {
-                    if (ev.which == '17') {
-                        this.keyPressed = true;
-                    }
-                });
-
-                document.body.addEventListener('keyup', (ev) => {
-                    this.keyPressed = false;
-                });
-            }
-        }
-
-        /**
-         *
-         *
-         * @author Michael Barros <michaelcbarros@gmail.com>
-         * @param {MouseEvent} ev
-         * @memberof MoveableElement
-         */
-        handleMouseDown(ev) {
-            if (this.keyPressed || !this.requireKeyDown) {
-                ev.preventDefault();
-
-                this.element.style.cursor = 'move';
-
-                this.changePointerEvents('none');
-
-                document.body.removeEventListener('mouseup', this.handleMouseUp);
-                document.body.addEventListener('mouseup', this.handleMouseUp);
-
-                document.body.removeEventListener('mousemove', this.handleMouseMove);
-                document.body.removeEventListener('mouseleave', this.handleMouseUp);
-
-                document.body.addEventListener('mousemove', this.handleMouseMove);
-                document.body.addEventListener('mouseleave', this.handleMouseUp);
-
-                try {
-                    document.querySelectorAll('iframe')[0].style.pointerEvents = 'none';
-                } catch (error) {}
-            }
-        }
-
-        changePointerEvents(value) {
-            for (let i = 0; i < this.element.children.length; i++) {
-                const child = this.element.children[i];
-
-                child.style.pointerEvents = value;
-            }
-        }
-
-        /**
-         *
-         *
-         * @author Michael Barros <michaelcbarros@gmail.com>
-         * @param {MouseEvent} ev
-         * @memberof MoveableElement
-         */
-        handleMouseUp(ev) {
-            this.moving = false;
-            this.element.style.cursor = this.originalCursor;
-            this.changePointerEvents('auto');
-
-            document.body.removeEventListener('mouseup', this.handleMouseUp);
-            document.body.removeEventListener('mousemove', this.handleMouseMove);
-            document.body.removeEventListener('mouseleave', this.handleMouseUp);
-
-            try {
-                document.querySelectorAll('iframe')[0].style.pointerEvents = '';
-            } catch (error) {}
-        }
-
-        /**
-         *
-         *
-         * @author Michael Barros <michaelcbarros@gmail.com>
-         * @param {MouseEvent} ev
-         * @memberof MoveableElement
-         */
-        handleMouseMove(ev) {
-            this.moving = true;
-
-            let top = ev.clientY - getStyle(this.element, 'height') / 2;
-            let bottom = ev.clientX - getStyle(this.element, 'width') / 2;
-
-            this.element.style.top = `${top}px`;
-            this.element.style.left = `${bottom}px`;
-        }
-
-        padCoord(coord) {
-            return coord.toString().padStart(5, ' ');
-        }
-
-        init() {
-            this.element.addEventListener('mousedown', this.handleMouseDown);
-        }
-    }
-
-    return MoveableElement;
-})();
 
 function exposeGlobalVariables() {
     let variables = [
