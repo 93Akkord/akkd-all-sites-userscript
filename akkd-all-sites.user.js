@@ -25,23 +25,15 @@
 // #region Grants
 
 // @grant		unsafeWindow
-// @grant       GM.addStyle
 // @grant       GM_addStyle
-// @grant       GM.getValue
 // @grant       GM_getValue
-// @grant       GM.setValue
 // @grant       GM_setValue
-// @grant       GM.info
 // @grant       GM_info
 // @grant       GM_info
-// @grant       GM.info
-// @grant       GM.xmlHttpRequest
 // @grant       GM_xmlhttpRequest
-// @grant       GM.registerMenuCommand
 // @grant       GM_registerMenuCommand
 // @grant       GM_getResourceText
 // @grant       GM_notification
-// @grant       GM.notification
 // @grant       window.close
 // @grant       window.focus
 
