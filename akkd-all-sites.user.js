@@ -1,3 +1,5 @@
+// #region UserScript Metadata
+
 // ==UserScript==
 
 // #region Info
@@ -24,18 +26,31 @@
 
 // #region Grants
 
-// @grant		unsafeWindow
+// @grant       GM_addElement
 // @grant       GM_addStyle
-// @grant       GM_getValue
-// @grant       GM_setValue
-// @grant       GM_info
-// @grant       GM_info
-// @grant       GM_xmlhttpRequest
-// @grant       GM_registerMenuCommand
+// @grant       GM_addValueChangeListener
+// @grant       GM_deleteValue
+// @grant       GM_download
 // @grant       GM_getResourceText
+// @grant       GM_getResourceURL
+// @grant       GM_getTab
+// @grant       GM_getTabs
+// @grant       GM_getValue
+// @grant       GM_listValues
+// @grant       GM_log
 // @grant       GM_notification
+// @grant       GM_openInTab
+// @grant       GM_registerMenuCommand
+// @grant       GM_removeValueChangeListener
+// @grant       GM_saveTab
+// @grant       GM_setClipboard
+// @grant       GM_setValue
+// @grant       GM_unregisterMenuCommand
+// @grant       GM_xmlhttpRequest
+// @grant       unsafeWindow
 // @grant       window.close
 // @grant       window.focus
+// @grant       window.onurlchange
 
 // #endregion Grants
 
@@ -66,9 +81,15 @@
 
 // ==/OpenUserJS==
 
+// #endregion UserScript Metadata
+
+// #region Type References
+
 /// <reference path='./node_modules/@types/tampermonkey/index.d.ts' />
 /// <reference path='./node_modules/@types/jquery/index.d.ts' />
 /// <reference path='./node_modules/@types/arrive/index.d.ts' />
+
+// #endregion Type References
 
 function exposeGlobalVariables() {
     let variables = [
@@ -87,8 +108,17 @@ function exposeGlobalVariables() {
         { name: 'getTopWindow', value: getTopWindow },
         { name: 'getStyle', value: getStyle },
 
-        { name: 'GM_xmlhttpRequest', value: GM_xmlhttpRequest },
+        { name: 'GM_info', value: GM_info },
     ];
+
+    GM_info.script.grant.forEach((grant) => {
+        if (grant.includes('GM_')) {
+            variables.push({
+                name: grant,
+                value: window[grant],
+            });
+        }
+    });
 
     variables.forEach((variable, index, variables) => {
         try {
@@ -541,5 +571,117 @@ function startPerformanceMonitor() {
     }
 }
 
+function alwaysOnFocus(on = true) {
+    if (!('test' in getWindow())) {
+        getWindow().originalFocusValues = {
+            'unsafeWindow.onblur': unsafeWindow.onblur,
+            'unsafeWindow.blurred': unsafeWindow.blurred,
+            'unsafeWindow.document.hasFocus': unsafeWindow.document.hasFocus,
+            'unsafeWindow.window.onfocus': unsafeWindow.window.onfocus,
+
+            'document.hidden': document.hidden,
+            'document.mozHidden': document.mozHidden,
+            'document.msHidden': document.msHidden,
+            'document.webkitHidden': document.webkitHidden,
+            'document.visibilityState': document.visibilityState,
+
+            'unsafeWindow.document.onvisibilitychange': unsafeWindow.document.onvisibilitychange,
+        };
+    }
+
+    if (true) {
+        
+    }
+
+    function getNestedDot(obj, dotStr) {
+        let parts = dotStr.split('.');
+
+        while (parts.length > 0) {
+            let part = parts.shift();
+
+            obj = obj[part];
+        }
+
+        return obj;
+    }
+
+    if (on) {
+        unsafeWindow.onblur = null;
+        unsafeWindow.blurred = false;
+
+        unsafeWindow.document.hasFocus = function () {
+            return true;
+        };
+        unsafeWindow.window.onfocus = function () {
+            return true;
+        };
+
+        Object.defineProperty(document, 'hidden', { value: false });
+        Object.defineProperty(document, 'mozHidden', { value: false });
+        Object.defineProperty(document, 'msHidden', { value: false });
+        Object.defineProperty(document, 'webkitHidden', { value: false });
+        Object.defineProperty(document, 'visibilityState', {
+            get: function () {
+                return 'visible';
+            },
+        });
+
+        unsafeWindow.document.onvisibilitychange = undefined;
+
+        let events = [
+            'visibilitychange',
+            'webkitvisibilitychange',
+            'blur', // may cause issues on some websites
+            'mozvisibilitychange',
+            'msvisibilitychange',
+        ];
+
+        for (let i = 0; i < events.length; i++) {
+            const event = events[i];
+
+            window.addEventListener(event, eventHandler, true);
+        }
+    } else {
+        let orig = getWindow().originalFocusValues;
+
+        unsafeWindow.onblur = orig['unsafeWindow.onblur'];
+        unsafeWindow.blurred = orig['unsafeWindow.blurred'];
+
+        unsafeWindow.document.hasFocus = orig['unsafeWindow.document.hasFocus'];
+        unsafeWindow.window.onfocus = orig['unsafeWindow.window.onfocus'];
+        
+        Object.defineProperty(document, 'hidden', { value: orig['document.hidden'] });
+        Object.defineProperty(document, 'mozHidden', { value: orig['document.mozHidden'] });
+        Object.defineProperty(document, 'msHidden', { value: orig['document.msHidden'] });
+        Object.defineProperty(document, 'webkitHidden', { value: orig['document.webkitHidden'] });
+        document.visibilityState = originalFocusValues['document.visibilityState'];
+
+        unsafeWindow.document.onvisibilitychange = undefined;
+
+        let events = [
+            'visibilitychange',
+            'webkitvisibilitychange',
+            'blur', // may cause issues on some websites
+            'mozvisibilitychange',
+            'msvisibilitychange',
+        ];
+
+        for (let i = 0; i < events.length; i++) {
+            const event = events[i];
+
+            window.removeEventListener(event, eventHandler, true);
+        }
+    }
+
+    // GM_registerMenuCommand
+}
+
+GM_getTab((tab) => {
+    tab.title = document.title;
+
+    GM_saveTab(tab);
+});
+
 exposeGlobalVariables();
 startPerformanceMonitor();
+alwaysOnFocus();
