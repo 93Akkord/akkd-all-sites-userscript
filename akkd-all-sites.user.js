@@ -5,6 +5,7 @@
 // #region Info
 
 // @name        akkd-all-sites
+// @namespace   https://openuserjs.org/users/93Akkord
 // @version     0.0.4
 // @description Akkd All Sites
 // @copyright   2022+, Michael Barros (https://openuserjs.org/users/93Akkord)
