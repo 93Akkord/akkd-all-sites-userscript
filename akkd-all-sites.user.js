@@ -4,7 +4,7 @@
 
 // #region Info
 
-// @name        Akkd All Sites
+// @name        akkd-all-sites
 // @version     0.0.4
 // @description Akkd All Sites
 // @copyright   2022+, Michael Barros (https://openuserjs.org/users/93Akkord)
@@ -62,7 +62,9 @@
 
 // @require     https://code.jquery.com/jquery-3.2.1.min.js
 // @require     https://cdnjs.cloudflare.com/ajax/libs/arrive/2.4.1/arrive.min.js
+// @require     https://openuserjs.org/src/libs/93Akkord/loglevel.js
 // @require     https://openuserjs.org/src/libs/93Akkord/akkd-common.js
+// @require     https://openuserjs.org/src/libs/sizzle/GM_config.min.js
 
 // #endregion Requires
 
@@ -91,6 +93,45 @@
 
 // #endregion Type References
 
+const logger = getLogger('akkd', { logLevel: log.levels.DEBUG });
+
+function setupConfig(logger) {
+    // demo: http://sizzlemctwizzle.github.io/GM_config/
+    GM_config.init({
+        id: `main-${location.host.replace(/\./g, '_')}`,
+        title: 'Akkd All Sites Config',
+
+        fields: {
+            // test: https://www.codingwithjesse.com/demo/2007-05-16-detect-browser-window-focus/
+            always_focus: {
+                label: 'Always Focus',
+                type: 'checkbox',
+                default: false,
+            },
+        },
+
+        events: {
+            init: function () {
+                init('loaded', () => alwaysOnFocus(GM_config.get('always_focus')));
+            },
+            open: function () {
+                alwaysOnFocus(true);
+            },
+            save: function () {},
+            close: function () {
+                alwaysOnFocus(GM_config.get('always_focus'));
+            },
+            reset: function () {},
+        },
+    });
+}
+
+function registryConfigMenu() {
+    let menuId = GM_registerMenuCommand(`Config`, () => {
+        GM_config.open();
+    });
+}
+
 function exposeGlobalVariables() {
     let variables = [
         // libs
@@ -109,6 +150,8 @@ function exposeGlobalVariables() {
         { name: 'getStyle', value: getStyle },
 
         { name: 'GM_info', value: GM_info },
+
+        { name: 'alwaysOnFocus', value: alwaysOnFocus },
     ];
 
     GM_info.script.grant.forEach((grant) => {
@@ -420,7 +463,7 @@ function startPerformanceMonitor() {
 
         // support of the API?
         if (performance.memory.totalJSHeapSize === 0) {
-            console.warn('totalJSHeapSize === 0... performance.memory is only available in Chrome .');
+            logger.warn('totalJSHeapSize === 0... performance.memory is only available in Chrome .');
         }
 
         let sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -571,8 +614,155 @@ function startPerformanceMonitor() {
     }
 }
 
-function alwaysOnFocus(on = true) {
-    if (!('test' in getWindow())) {
+function alwaysOnFocusOld() {
+    let on = GM_getValue('always_focus', false);
+    let focusMenuCommandID;
+
+    /**
+     *
+     *
+     * @author Michael Barros <michaelcbarros@gmail.com>
+     * @param {boolean} [init=false]
+     */
+    function registerAlwaysFocusMenuCommand(init = false) {
+        if (!init) {
+            on = !on;
+
+            GM_setValue('always_focus', on);
+        }
+
+        if (focusMenuCommandID != undefined) {
+            GM_unregisterMenuCommand(focusMenuCommandID);
+        }
+
+        focusMenuCommandID = GM_registerMenuCommand(`Always Focus: ${on ? 'on' : 'off'}`, () => {
+            registerAlwaysFocusMenuCommand();
+        });
+
+        _alwaysOnFocus(on);
+    }
+
+    function _alwaysOnFocus(on) {
+        if (!('originalFocusValues' in getWindow())) {
+            getWindow().originalFocusValues = {
+                'unsafeWindow.onblur': unsafeWindow.onblur,
+                'unsafeWindow.blurred': unsafeWindow.blurred,
+                'unsafeWindow.document.hasFocus': unsafeWindow.document.hasFocus,
+                'unsafeWindow.window.onfocus': unsafeWindow.window.onfocus,
+
+                'document.hidden': document.hidden,
+                'document.mozHidden': document.mozHidden,
+                'document.msHidden': document.msHidden,
+                'document.webkitHidden': document.webkitHidden,
+                'document.visibilityState': document.visibilityState,
+
+                'unsafeWindow.document.onvisibilitychange': unsafeWindow.document.onvisibilitychange,
+            };
+        }
+
+        if (!('__eventHandler__' in getWindow())) {
+            getWindow().__eventHandler__ = function (event) {
+                event.stopImmediatePropagation();
+            };
+        }
+
+        function getNestedDot(obj, dotStr) {
+            let parts = dotStr.split('.');
+
+            while (parts.length > 0) {
+                let part = parts.shift();
+
+                obj = obj[part];
+            }
+
+            return obj;
+        }
+
+        if (on) {
+            unsafeWindow.onblur = null;
+            unsafeWindow.blurred = false;
+
+            unsafeWindow.document.hasFocus = function () {
+                return true;
+            };
+            unsafeWindow.window.onfocus = function () {
+                return true;
+            };
+
+            Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+            Object.defineProperty(document, 'mozHidden', { value: false, configurable: true });
+            Object.defineProperty(document, 'msHidden', { value: false, configurable: true });
+            Object.defineProperty(document, 'webkitHidden', { value: false, configurable: true });
+            Object.defineProperty(document, 'visibilityState', {
+                get: function () {
+                    return 'visible';
+                },
+                configurable: true,
+            });
+
+            unsafeWindow.document.onvisibilitychange = undefined;
+
+            let events = [
+                'visibilitychange',
+                'webkitvisibilitychange',
+                'blur', // may cause issues on some websites
+                'mozvisibilitychange',
+                'msvisibilitychange',
+            ];
+
+            for (let i = 0; i < events.length; i++) {
+                const event = events[i];
+
+                window.addEventListener(event, getWindow().__eventHandler__, true);
+            }
+        } else {
+            let orig = getWindow().originalFocusValues;
+
+            unsafeWindow.onblur = orig['unsafeWindow.onblur'];
+            unsafeWindow.blurred = orig['unsafeWindow.blurred'];
+
+            unsafeWindow.document.hasFocus = orig['unsafeWindow.document.hasFocus'];
+            unsafeWindow.window.onfocus = orig['unsafeWindow.window.onfocus'];
+
+            // Object.defineProperty(document, 'hidden', { value: orig['document.hidden'] });
+            // Object.defineProperty(document, 'mozHidden', { value: orig['document.mozHidden'] });
+            // Object.defineProperty(document, 'msHidden', { value: orig['document.msHidden'] });
+            // Object.defineProperty(document, 'webkitHidden', { value: orig['document.webkitHidden'] });
+            document.hidden = orig['document.hidden'];
+            document.mozHidden = orig['document.mozHidden'];
+            document.msHidden = orig['document.msHidden'];
+            document.webkitHidden = orig['document.webkitHidden'];
+            document.visibilityState = orig['document.visibilityState'];
+
+            unsafeWindow.document.onvisibilitychange = orig['unsafeWindow.document.onvisibilitychange'];
+
+            let events = [
+                'visibilitychange',
+                'webkitvisibilitychange',
+                'blur', // may cause issues on some websites
+                'mozvisibilitychange',
+                'msvisibilitychange',
+            ];
+
+            for (let i = 0; i < events.length; i++) {
+                const event = events[i];
+
+                window.removeEventListener(event, getWindow().__eventHandler__, true);
+            }
+        }
+    }
+
+    registerAlwaysFocusMenuCommand(true);
+}
+
+/**
+ *
+ *
+ * @author Michael Barros <michaelcbarros@gmail.com>
+ * @param {boolean} on
+ */
+function alwaysOnFocus(on) {
+    if (!('originalFocusValues' in getWindow())) {
         getWindow().originalFocusValues = {
             'unsafeWindow.onblur': unsafeWindow.onblur,
             'unsafeWindow.blurred': unsafeWindow.blurred,
@@ -589,8 +779,10 @@ function alwaysOnFocus(on = true) {
         };
     }
 
-    if (true) {
-        
+    if (!('__eventHandler__' in getWindow())) {
+        getWindow().__eventHandler__ = function (event) {
+            event.stopImmediatePropagation();
+        };
     }
 
     function getNestedDot(obj, dotStr) {
@@ -616,14 +808,15 @@ function alwaysOnFocus(on = true) {
             return true;
         };
 
-        Object.defineProperty(document, 'hidden', { value: false });
-        Object.defineProperty(document, 'mozHidden', { value: false });
-        Object.defineProperty(document, 'msHidden', { value: false });
-        Object.defineProperty(document, 'webkitHidden', { value: false });
+        Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+        Object.defineProperty(document, 'mozHidden', { value: false, configurable: true });
+        Object.defineProperty(document, 'msHidden', { value: false, configurable: true });
+        Object.defineProperty(document, 'webkitHidden', { value: false, configurable: true });
         Object.defineProperty(document, 'visibilityState', {
             get: function () {
                 return 'visible';
             },
+            configurable: true,
         });
 
         unsafeWindow.document.onvisibilitychange = undefined;
@@ -639,7 +832,7 @@ function alwaysOnFocus(on = true) {
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
 
-            window.addEventListener(event, eventHandler, true);
+            window.addEventListener(event, getWindow().__eventHandler__, true);
         }
     } else {
         let orig = getWindow().originalFocusValues;
@@ -649,14 +842,18 @@ function alwaysOnFocus(on = true) {
 
         unsafeWindow.document.hasFocus = orig['unsafeWindow.document.hasFocus'];
         unsafeWindow.window.onfocus = orig['unsafeWindow.window.onfocus'];
-        
-        Object.defineProperty(document, 'hidden', { value: orig['document.hidden'] });
-        Object.defineProperty(document, 'mozHidden', { value: orig['document.mozHidden'] });
-        Object.defineProperty(document, 'msHidden', { value: orig['document.msHidden'] });
-        Object.defineProperty(document, 'webkitHidden', { value: orig['document.webkitHidden'] });
-        document.visibilityState = originalFocusValues['document.visibilityState'];
 
-        unsafeWindow.document.onvisibilitychange = undefined;
+        // Object.defineProperty(document, 'hidden', { value: orig['document.hidden'] });
+        // Object.defineProperty(document, 'mozHidden', { value: orig['document.mozHidden'] });
+        // Object.defineProperty(document, 'msHidden', { value: orig['document.msHidden'] });
+        // Object.defineProperty(document, 'webkitHidden', { value: orig['document.webkitHidden'] });
+        document.hidden = orig['document.hidden'];
+        document.mozHidden = orig['document.mozHidden'];
+        document.msHidden = orig['document.msHidden'];
+        document.webkitHidden = orig['document.webkitHidden'];
+        document.visibilityState = orig['document.visibilityState'];
+
+        unsafeWindow.document.onvisibilitychange = orig['unsafeWindow.document.onvisibilitychange'];
 
         let events = [
             'visibilitychange',
@@ -669,19 +866,74 @@ function alwaysOnFocus(on = true) {
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
 
-            window.removeEventListener(event, eventHandler, true);
+            window.removeEventListener(event, getWindow().__eventHandler__, true);
+        }
+    }
+}
+
+/**
+ *
+ *
+ * @author Michael Barros <michaelcbarros@gmail.com>
+ */
+async function init(when) {
+    const DEFAULT_OPTIONS = {
+        use_vanilla: false,
+    };
+
+    let options = typeof arguments[1] == 'object' ? arguments[1] : {};
+    let func = typeof arguments[1] == 'object' ? arguments[2] : arguments[1];
+    let args = typeof arguments[1] == 'object' ? arguments[3] : arguments[2];
+
+    options = Object.assign(DEFAULT_OPTIONS, options);
+
+    async function runCallback() {
+        if (args && args.length > 0) {
+            await func(...args);
+        } else {
+            await func();
         }
     }
 
-    // GM_registerMenuCommand
+    if (when == 'start') {
+        await runCallback();
+    } else if (when == 'ready') {
+        if (!options.use_vanilla) {
+            $(document).ready(async (e) => {
+                await runCallback();
+            });
+        } else {
+            document.addEventListener('DOMContentLoaded', async (e) => {
+                await runCallback();
+            });
+        }
+    } else if (when == 'loaded') {
+        if (!options.use_vanilla) {
+            $(document).on('readystatechange', async (e) => {
+                if (e.target.readyState == 'complete') {
+                    await runCallback();
+                }
+            });
+        } else {
+            document.addEventListener('readystatechange', async (e) => {
+                if (e.target.readyState === 'complete') {
+                    await runCallback();
+                }
+            });
+        }
+    }
 }
 
-GM_getTab((tab) => {
-    tab.title = document.title;
+(async function () {
+    setupConfig(logger);
+    registryConfigMenu();
 
-    GM_saveTab(tab);
-});
+    GM_getTab((tab) => {
+        tab.title = document.title;
 
-exposeGlobalVariables();
-startPerformanceMonitor();
-alwaysOnFocus();
+        GM_saveTab(tab);
+    });
+
+    exposeGlobalVariables();
+    startPerformanceMonitor();
+})();
